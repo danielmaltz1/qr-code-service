@@ -3,8 +3,11 @@ package mercator.demo;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
-
-import org.springframework.boot.jackson.autoconfigure.JacksonProperties;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -25,44 +28,57 @@ public class TaskController {
     }
 
     @GetMapping("/api/qrcode")
-    public ResponseEntity<Object> qrCode(@RequestParam("size") String size, @RequestParam("type") String typeOfImage) {
-        int sizeInt = Integer.parseInt(size);
-        if (150 <= sizeInt && sizeInt <= 350) {
-            MediaType mediaType;
-            switch (typeOfImage) {
-                case "png":
-                    mediaType = MediaType.IMAGE_PNG;
-                    break;
-                case "jpeg":
-                    mediaType = MediaType.IMAGE_JPEG;
-                    break;
-                case "gif":
-                    mediaType = MediaType.IMAGE_GIF;
-                    break;
-                default:
-                    return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(
-                            Map.of("error", "Only png, jpeg and gif image types are supported")
-                    );
-            }
-            BufferedImage image = getImage(sizeInt);
-            return ResponseEntity
-                    .ok()
-                    .contentType(mediaType)
-                    .body(image);
-        } else {
+    public ResponseEntity<Object> qrCode(@RequestParam("size") String size,
+                                         @RequestParam("type") String typeOfImage,
+                                         @RequestParam("contents") String contents) {
+        if (contents == null || contents.isEmpty()) {
             return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(
-                    Map.of("error", "Image size must be between 150 and 350 pixels")
+                    Map.of("error", "Contents cannot be null or blank")
             );
+        }
+        else {
+            int sizeInt = Integer.parseInt(size);
+            if (150 <= sizeInt && sizeInt <= 350) {
+                MediaType mediaType;
+                switch (typeOfImage) {
+                    case "png":
+                        mediaType = MediaType.IMAGE_PNG;
+                        break;
+                    case "jpeg":
+                        mediaType = MediaType.IMAGE_JPEG;
+                        break;
+                    case "gif":
+                        mediaType = MediaType.IMAGE_GIF;
+                        break;
+                    default:
+                        return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(
+                                Map.of("error", "Only png, jpeg and gif image types are supported")
+                        );
+                }
+                return handleQrCode(contents, sizeInt, mediaType);
+            } else {
+                return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(
+                        Map.of("error", "Image size must be between 150 and 350 pixels")
+                );
+            }
         }
     }
 
-
-    public BufferedImage getImage(int size) {
-        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = image.createGraphics();
-        g.setColor(Color.WHITE);
-        g.fillRect(0, 0, size, size);
-        return image;
+    public ResponseEntity<Object> handleQrCode(String contents, int sizeInt, MediaType mediaType) {
+        QRCodeWriter writer = new QRCodeWriter();
+        BufferedImage bufferedImage;
+        try {
+            BitMatrix bitMatrix = writer.encode(contents, BarcodeFormat.QR_CODE, sizeInt, sizeInt);
+            bufferedImage = MatrixToImageWriter.toBufferedImage(bitMatrix);
+            return ResponseEntity
+                    .ok()
+                    .contentType(mediaType)
+                    .body(bufferedImage);
+        } catch (WriterException e) {
+            return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(
+                    Map.of("error", "Error while encoding QRCode")
+            );
+        }
     }
 
 
